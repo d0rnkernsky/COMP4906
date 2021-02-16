@@ -1,7 +1,7 @@
 /env
 /.vscode
 /__pycache__
-
+/.idea
 *.mha
 .DS_Store
 
