@@ -20,14 +20,15 @@ def add_path_len(data: ParticipantsData):
             if reg == Scan.ALL:
                 continue
 
-            prev_point = np.zeros((4, 1))
-            prev_point[3, :] = 1
+            origin = np.zeros((4, 1))
+            origin[3, :] = 1
             reg_path_len = 0
-
             reg_transf = part.get_region(reg)
+
+            prev_point = reg_transf.transformations[0].trans_mat.dot(origin)
             for i in range(1, len(reg_transf.transformations)):
                 record: TransformationRecord = reg_transf.transformations[i]
-                next_point = record.trans_mat.dot(prev_point)
+                next_point = record.trans_mat.dot(origin)
                 record.path_length = np.linalg.norm(next_point - prev_point)
                 reg_path_len = reg_path_len + record.path_length
                 prev_point = next_point
@@ -146,17 +147,17 @@ def pad_data_to_max(in_data: list, MAX_LEN: int):
     for i in range(len(in_data)):
         if MAX_LEN > in_data[i].shape[1]:
             in_data[i] = np.pad(in_data[i], [(0, 0), (0, MAX_LEN - in_data[i].shape[1])], mode='constant',
-                                           constant_values="0")
+                                constant_values="0")
 
 
-def data_slicing(data, max_shift: int, label: ProficiencyLabel):
+def data_slicing(data, slice_len: int, label: ProficiencyLabel):
     SLICE_RATIO = 0.9
     res = []
+    slice_len = int(np.floor(slice_len * SLICE_RATIO))
 
     for i in range(len(data)):
-        slice_len = int(np.floor(data[i].shape[1] * SLICE_RATIO))
         j = 0
-        while j < max_shift:
+        while j + slice_len < data[i].shape[1]:
             res.append(data[i][:, j:j + slice_len])
             j = j + 1
 

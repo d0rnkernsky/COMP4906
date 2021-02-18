@@ -42,16 +42,15 @@ def main():
     x_novice = ut.prepare_data_all_reg(novices)
 
     all_data = x_novice + x_intermed + x_expert
-    min_len = ut.find_min_seq(all_data)
+    slice_len = ut.find_min_seq(all_data)
 
-    x_novice, y_novice = ut.data_slicing(x_novice, min_len, ProficiencyLabel.Novice)
-    x_intermed, y_intermed = ut.data_slicing(x_intermed, min_len, ProficiencyLabel.Intermediate)
-    x_expert, y_expert = ut.data_slicing(x_expert, min_len, ProficiencyLabel.Expert)
+    x_novice, y_novice = ut.data_slicing(x_novice, slice_len, ProficiencyLabel.Novice)
+    x_intermed, y_intermed = ut.data_slicing(x_intermed, slice_len, ProficiencyLabel.Intermediate)
+    x_expert, y_expert = ut.data_slicing(x_expert, slice_len, ProficiencyLabel.Expert)
 
     all_data = x_novice + x_intermed + x_expert
-    max_len = ut.find_max_seq(all_data)
-
-    ut.pad_data_to_max(all_data, max_len)
+    # max_len = ut.find_max_seq(all_data)
+    # ut.pad_data_to_max(all_data, max_len)
 
     X = np.array(all_data)
     Y = np.append(y_novice, np.append(y_intermed, y_expert, 0), 0)
