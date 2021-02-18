@@ -132,10 +132,11 @@ class MhaDataReader:
                         prev_time = parse_timestamp_line(line)
 
                     timestamp = parse_timestamp_line(line)
-                    time_delta = (timestamp - prev_time)
+                    time_delta = timestamp - prev_time
 
-                    part.add_transform(scan_nm, prob_to_ref, time_delta)
-                    part.add_transform(cs.Scan.ALL, prob_to_ref, time_delta)
+                    rec = cs.TransformationRecord(prob_to_ref, time_delta)
+                    part.add_transform(scan_nm, rec)
+                    part.add_transform(cs.Scan.ALL, rec)
 
                     prob_to_tracker = np.array([])
                     ref_to_tracker = np.array([])

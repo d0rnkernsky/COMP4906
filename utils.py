@@ -1,7 +1,7 @@
 import numpy as np
-from classes import ParticipantScan, ParticipantsData, Scan, TransformationRecord
+from classes import ParticipantScan, ParticipantsData, Scan, TransformationRecord, ProficiencyLabel
 
-appcnt = 0
+
 def remove_spec_char(string):
     """
         Removes \n, \r, \\n, \\r, ", ' and strips the string
@@ -25,10 +25,11 @@ def add_path_len(data: ParticipantsData):
             reg_path_len = 0
 
             reg_transf = part.get_region(reg)
-            for i in range(len(reg_transf.transformations)):
+            for i in range(1, len(reg_transf.transformations)):
                 record: TransformationRecord = reg_transf.transformations[i]
                 next_point = record.trans_mat.dot(prev_point)
-                reg_path_len = reg_path_len + np.linalg.norm(next_point - prev_point)
+                record.path_length = np.linalg.norm(next_point - prev_point)
+                reg_path_len = reg_path_len + record.path_length
                 prev_point = next_point
 
             reg_transf.path_len = reg_path_len
@@ -49,11 +50,14 @@ def add_angular_speed(data: ParticipantsData):
             for i in range(1, len(reg_transf.transformations)):
                 cur: TransformationRecord = reg_transf.transformations[i]
                 prev: TransformationRecord = reg_transf.transformations[i - 1]
-                angle_delta = (rotation_len(cur, prev) / (cur.time_stamp - prev.time_stamp))
-                reg_ang_delta = reg_ang_delta + angle_delta
 
+                t_delta = max((cur.time_stamp - prev.time_stamp), 0.000000000001)
+                angle_speed = (rotation_len(cur, prev) / t_delta)
+                cur.angular_speed = angle_speed
 
-            part.angular_speed = reg_ang_delta / len(reg_transf.transformations)
+                reg_ang_delta = reg_ang_delta + angle_speed
+
+            reg_transf.angular_speed = reg_ang_delta / len(reg_transf.transformations)
 
 
 def rotation_len(probe_to_ref_1: TransformationRecord, probe_to_ref_0: TransformationRecord):
@@ -61,11 +65,11 @@ def rotation_len(probe_to_ref_1: TransformationRecord, probe_to_ref_0: Transform
     probe_to_ref_0 = probe_to_ref_0.trans_mat[:3, :3]
 
     rotation_delta = probe_to_ref_1.dot(probe_to_ref_0.T)
-    if (np.trace(rotation_delta) - 1) / 2 > 1 or (np.trace(rotation_delta) - 1) / 2 < -1:
-        global appcnt
-        appcnt = appcnt + 1
+    arg = (np.trace(rotation_delta) - 1) / 2
+    arg = min(arg, 1)
+    arg = max(arg, -1)
 
-    return np.arccos((np.trace(rotation_delta) - 1) / 2)
+    return np.arccos(arg)
 
 
 def add_linear_speed(data: ParticipantsData):
@@ -79,3 +83,61 @@ def add_linear_speed(data: ParticipantsData):
 
             reg_rec = part.get_region(reg)
             reg_rec.linear_speed = reg_rec.path_len / reg_rec.time
+            for i in range(1, len(reg_rec.transformations)):
+                rec: TransformationRecord
+                rec = reg_rec.transformations[i]
+                rec.linear_speed = rec.path_length / rec.time_stamp
+
+
+def prepare_data_all_reg(data: ParticipantsData, label: ProficiencyLabel):
+    records = []
+    part: ParticipantScan
+    for part in data:
+        shape = (16, 1)
+        part_records = None
+        tr: TransformationRecord
+        for tr in part.get_transforms(Scan.ALL):
+            tr: TransformationRecord
+            to_vector = np.reshape(tr.trans_mat, shape)
+            to_vector[to_vector.shape[0] - 4, 0] = tr.path_length
+            to_vector[to_vector.shape[0] - 3, 0] = tr.angular_speed
+            to_vector[to_vector.shape[0] - 2, 0] = tr.linear_speed
+            to_vector[to_vector.shape[0] - 1, 0] = tr.time_stamp
+
+            if type(part_records) != np.ndarray:
+                part_records = to_vector
+            else:
+                part_records = np.append(part_records, to_vector, 1)
+
+        records.append(part_records)
+
+    labels = np.full(len(records), label.value)
+    return records, labels
+
+
+def find_sequence_len_limits(in_data: list):
+    max_len = in_data[0].shape[1]
+    min_len = in_data[0].shape[1]
+
+    for i in range(len(in_data)):
+        rec: np.ndarray
+        rec = in_data[i]
+
+        if rec.shape[1] > max_len:
+            max_len = rec.shape[1]
+        if rec.shape[1] < min_len:
+            min_len = rec.shape[1]
+
+    return min_len, max_len
+
+
+def pad_data_to_max(in_data: list, MAX_LEN: int):
+    assert MAX_LEN is not None
+
+    for i in range(len(in_data)):
+        if MAX_LEN > in_data[i].shape[1]:
+            in_data[i] = np.pad(in_data[i], (0, MAX_LEN - in_data[i].shape[1]), mode='constant', constant_values="0")
+
+
+def window_slicing(data, max_s):
+    pass

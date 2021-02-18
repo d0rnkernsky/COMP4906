@@ -1,5 +1,13 @@
 from enum import Enum
-import numpy as np
+
+
+class ProficiencyLabel(Enum):
+    """
+        Scanned region
+    """
+    Expert = 0
+    Intermediate = 1
+    Novice = 2
 
 
 class Scan(Enum):
@@ -21,9 +29,12 @@ LINEAR_SPEED: str = 'lin_speed'
 
 
 class TransformationRecord:
-    def __init__(self, trans_mat, time_stamp):
+    def __init__(self, trans_mat, time_stamp, linear_speed=0, angular_speed=0, path_length=0):
         self.trans_mat = trans_mat
         self.time_stamp = time_stamp
+        self.linear_speed = linear_speed
+        self.angular_speed = angular_speed
+        self.path_length = path_length
 
 
 class RegionScan:
@@ -66,8 +77,7 @@ class ParticipantScan:
     def get_region(self, reg: Scan) -> RegionScan:
         return self.store[reg]
 
-    def add_transform(self, reg, transform_mat: np.ndarray, time_stamp: float = 0):
-        transform_rec = TransformationRecord(transform_mat, time_stamp)
+    def add_transform(self, reg, transform_rec: TransformationRecord):
         self.store[reg].transformations.append(transform_rec)
 
     def get_name(self):
