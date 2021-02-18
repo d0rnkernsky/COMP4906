@@ -89,7 +89,7 @@ def add_linear_speed(data: ParticipantsData):
                 rec.linear_speed = rec.path_length / rec.time_stamp
 
 
-def prepare_data_all_reg(data: ParticipantsData, label: ProficiencyLabel):
+def prepare_data_all_reg(data: ParticipantsData):
     records = []
     part: ParticipantScan
     for part in data:
@@ -111,13 +111,11 @@ def prepare_data_all_reg(data: ParticipantsData, label: ProficiencyLabel):
 
         records.append(part_records)
 
-    labels = np.full(len(records), label.value)
-    return records, labels
+    return records
 
 
-def find_sequence_len_limits(in_data: list):
+def find_max_seq(in_data: list):
     max_len = in_data[0].shape[1]
-    min_len = in_data[0].shape[1]
 
     for i in range(len(in_data)):
         rec: np.ndarray
@@ -125,10 +123,21 @@ def find_sequence_len_limits(in_data: list):
 
         if rec.shape[1] > max_len:
             max_len = rec.shape[1]
+
+    return max_len
+
+
+def find_min_seq(in_seq: list):
+    min_len = in_seq[0].shape[1]
+
+    for i in range(len(in_seq)):
+        rec: np.ndarray
+        rec = in_seq[i]
+
         if rec.shape[1] < min_len:
             min_len = rec.shape[1]
 
-    return min_len, max_len
+    return min_len
 
 
 def pad_data_to_max(in_data: list, MAX_LEN: int):
@@ -136,8 +145,19 @@ def pad_data_to_max(in_data: list, MAX_LEN: int):
 
     for i in range(len(in_data)):
         if MAX_LEN > in_data[i].shape[1]:
-            in_data[i] = np.pad(in_data[i], (0, MAX_LEN - in_data[i].shape[1]), mode='constant', constant_values="0")
+            in_data[i] = np.pad(in_data[i], [(0, 0), (0, MAX_LEN - in_data[i].shape[1])], mode='constant',
+                                           constant_values="0")
 
 
-def window_slicing(data, max_s):
-    pass
+def data_slicing(data, max_shift: int, label: ProficiencyLabel):
+    SLICE_RATIO = 0.9
+    res = []
+
+    for i in range(len(data)):
+        slice_len = int(np.floor(data[i].shape[1] * SLICE_RATIO))
+        j = 0
+        while j < max_shift:
+            res.append(data[i][:, j:j + slice_len])
+            j = j + 1
+
+    return res, np.full((len(res),), label.value)

@@ -23,7 +23,7 @@ def main():
     ut.add_linear_speed(intermediates)
     ut.add_angular_speed(intermediates)
 
-    x_intermed, y_intermed = ut.prepare_data_all_reg(intermediates, ProficiencyLabel.Intermediate)
+    x_intermed = ut.prepare_data_all_reg(intermediates)
 
     experts = parser.read_data('./data/Experts/')
     sanity_check(experts)
@@ -31,7 +31,7 @@ def main():
     ut.add_path_len(experts)
     ut.add_linear_speed(experts)
     ut.add_angular_speed(experts)
-    x_expert, y_expert = ut.prepare_data_all_reg(experts, ProficiencyLabel.Expert)
+    x_expert = ut.prepare_data_all_reg(experts)
 
     novices = parser.read_data('./data/Novices/')
     sanity_check(novices)
@@ -39,11 +39,20 @@ def main():
     ut.add_path_len(novices)
     ut.add_linear_speed(novices)
     ut.add_angular_speed(novices)
-    x_novice, y_novice = ut.prepare_data_all_reg(novices, ProficiencyLabel.Novice)
+    x_novice = ut.prepare_data_all_reg(novices)
 
     all_data = x_novice + x_intermed + x_expert
-    min_len, max_len = ut.find_sequence_len_limits(all_data)
+    min_len = ut.find_min_seq(all_data)
+
+    x_novice, y_novice = ut.data_slicing(x_novice, min_len, ProficiencyLabel.Novice)
+    x_intermed, y_intermed = ut.data_slicing(x_intermed, min_len, ProficiencyLabel.Intermediate)
+    x_expert, y_expert = ut.data_slicing(x_expert, min_len, ProficiencyLabel.Expert)
+
+    all_data = x_novice + x_intermed + x_expert
+    max_len = ut.find_max_seq(all_data)
+
     ut.pad_data_to_max(all_data, max_len)
+
     X = np.array(all_data)
     Y = np.append(y_novice, np.append(y_intermed, y_expert, 0), 0)
 
