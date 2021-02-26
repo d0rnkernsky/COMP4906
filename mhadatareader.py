@@ -4,6 +4,11 @@ import utils as ut
 import classes as cs
 
 
+RECORD_STATUS_MSG = 'status'
+PROB_TO_TRACKER_REC = 'probetotracker'
+REF_TO_TRACKER_REC = 'referencetotracker'
+TIMESTAMP_REC = 'timestamp'
+
 def parse_timestamp_line(line):
     """
         Parses lines with timestamp and returns timestamp
@@ -45,8 +50,8 @@ def parse_file_name(file_name):
     """
         Parses file name and returns participant and scanned region
     """
-
-    fn = file_name.split('_')
+    fn = file_name[file_name.rfind('/') + 1:]
+    fn = fn.split('_')
     return fn[1], fn[2].split('.')[0]
 
 
@@ -58,7 +63,7 @@ class MhaDataReader:
     def __init__(self):
         self.__end_of_file = 'ElementDataFile = LOCAL'
         self.__transform_line = 'Transform'
-        self.__extenstion = '.mha'
+        self.__extension = '.mha'
 
     def read_data(self, dir_name):
         """
@@ -79,7 +84,7 @@ class MhaDataReader:
         data = cs.ParticipantsData()
 
         # filter out non mha files
-        files = [f'{dir_name}{fn}' for fn in listdir(dir_name) if str(fn[-4:]).lower() == self.__extenstion]
+        files = [f'{dir_name}{fn}' for fn in listdir(dir_name) if str(fn[-4:]).lower() == self.__extension]
         files.sort()
 
         for file_name in files:
@@ -101,9 +106,12 @@ class MhaDataReader:
 
             Returns: time spent scanning the region
         """
-        prob_to_tracker = np.array([])
-        ref_to_tracker = np.array([])
+        prob_to_tracker = np.zeros((4, 4))
+        ref_to_tracker = np.zeros((4, 4))
+        prev_prob_to_tracker = np.zeros((4, 4))
+        prev_ref_to_tracker = np.zeros((4, 4))
         time_delta = 0
+        prev_time_delta = 0
         prev_time = 0
         with open(file_name, 'rb') as f:
             for line in f:
@@ -112,34 +120,38 @@ class MhaDataReader:
                 if self.__end_of_file in line:
                     break
 
-                record_status_msg = 'status'
-                if record_status_msg in line.lower():
+                if RECORD_STATUS_MSG in line.lower():
                     continue
 
-                prob_to_tracker_rec = 'probetotracker'
-                ref_to_tracker_rec = 'referencetotracker'
-                timestamp_rec = 'timestamp'
-
-                if prob_to_tracker_rec in line.lower():
+                if PROB_TO_TRACKER_REC in line.lower():
                     prob_to_tracker = parse_transform(line)
-                elif ref_to_tracker_rec in line.lower():
+                elif REF_TO_TRACKER_REC in line.lower():
                     ref_to_tracker = parse_transform(line)
-                elif timestamp_rec in line.lower():
-                    ref_to_tracker_inv = np.linalg.inv(ref_to_tracker)
-                    prob_to_ref = ref_to_tracker_inv.dot(prob_to_tracker)
-
+                elif TIMESTAMP_REC in line.lower():
                     if len(part.get_transforms(scan_nm)) == 0:
                         prev_time = parse_timestamp_line(line)
 
                     timestamp = parse_timestamp_line(line)
                     time_delta = timestamp - prev_time
 
+                    # skip identical transformations with same time stamps
+                    if np.allclose(prev_ref_to_tracker, ref_to_tracker) \
+                            and np.allclose(prev_prob_to_tracker, prob_to_tracker) \
+                            and time_delta == prev_time_delta:
+                        continue
+
+                    # computing reference-to-tracker transformations
+                    ref_to_tracker_inv = np.linalg.inv(ref_to_tracker)
+                    prob_to_ref = ref_to_tracker_inv.dot(prob_to_tracker)
+
                     rec = cs.TransformationRecord(prob_to_ref, time_delta)
                     part.add_transform(scan_nm, rec)
                     part.add_transform(cs.Scan.ALL, rec)
 
-                    prob_to_tracker = np.array([])
-                    ref_to_tracker = np.array([])
+                    # update previous transformations
+                    prev_prob_to_tracker = prob_to_tracker
+                    prev_ref_to_tracker = ref_to_tracker
+                    prev_time_delta = time_delta
 
             f.close()
 

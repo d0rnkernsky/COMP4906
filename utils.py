@@ -52,7 +52,7 @@ def add_angular_speed(data: ParticipantsData):
                 cur: TransformationRecord = reg_transf.transformations[i]
                 prev: TransformationRecord = reg_transf.transformations[i - 1]
 
-                t_delta = max((cur.time_stamp - prev.time_stamp), 0.000000000001)
+                t_delta = (cur.time_stamp - prev.time_stamp)
                 angle_speed = (rotation_len(cur, prev) / t_delta)
                 cur.angular_speed = angle_speed
 
@@ -151,9 +151,9 @@ def pad_data_to_max(in_data: list, MAX_LEN: int):
 
 
 def data_slicing(data, slice_len: int, label: ProficiencyLabel):
-    SLICE_RATIO = 0.9
+    slice_ratio = 0.9
     res = []
-    slice_len = int(np.floor(slice_len * SLICE_RATIO))
+    slice_len = int(np.floor(slice_len * slice_ratio))
 
     for i in range(len(data)):
         j = 0
@@ -162,3 +162,41 @@ def data_slicing(data, slice_len: int, label: ProficiencyLabel):
             j = j + 1
 
     return res, np.full((len(res),), label.value)
+
+
+def form_folds(novices, intermed, experts):
+    return [(novices[:5], intermed[:5], [experts[0]]),
+            (novices[5:10], intermed[5:10], [experts[1]]),
+            (novices[10:], intermed[10:], [experts[2]])]
+
+
+def shuffle(x_data, y_data):
+    idx = np.random.permutation(len(x_data))
+    x_shuffled = []
+    y_shuffled = []
+    for i in range(len(x_data)):
+        x_shuffled.append(x_data[idx[i]])
+        y_shuffled.append(y_data[idx[i]])
+
+    return np.array(x_shuffled), np.array(y_shuffled),
+
+
+def augment_and_split(novices: list, intermeds: list, experts: list) -> (
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+    all_data = novices + intermeds + experts
+    slice_len = find_min_seq(all_data)
+
+    x_novice, y_novice = data_slicing(novices, slice_len, ProficiencyLabel.Novice)
+    x_intermed, y_intermed = data_slicing(intermeds, slice_len, ProficiencyLabel.Intermediate)
+    x_expert, y_expert = data_slicing(experts, slice_len, ProficiencyLabel.Expert)
+
+    x = np.array(x_novice + x_intermed + x_expert)
+    y = np.append(y_novice, np.append(y_intermed, y_expert))
+
+    train_to_test_ration = 0.8
+    split = int(len(x) * train_to_test_ration)
+
+    x_train, y_train = shuffle(x[:split], y[:split])
+    x_test, y_test = shuffle(x[split:], y[split:])
+
+    return x_train, y_train, x_test, y_test

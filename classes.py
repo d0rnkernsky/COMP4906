@@ -137,3 +137,12 @@ class ParticipantsData:
     def __iter__(self) -> ParticipantScan:
         for p in self.store:
             yield self.store[p]
+
+
+class FoldSplit:
+    def __init__(self, folds: list):
+        self.folds = folds
+
+    def __iter__(self):
+        for i in range(len(self.folds)):
+            yield self.folds[i]
