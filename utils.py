@@ -180,6 +180,26 @@ def shuffle(x_data, y_data):
 
     return np.array(x_shuffled), np.array(y_shuffled),
 
+def augment_and_split2(novices: list, intermeds: list, experts: list) -> (
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+    all_data = novices + intermeds + experts
+    slice_len = find_min_seq(all_data)
+
+    x_novice, y_novice = data_slicing(novices, slice_len, ProficiencyLabel.Novice)
+    x_intermed, y_intermed = data_slicing(intermeds, slice_len, ProficiencyLabel.Intermediate)
+    x_expert, y_expert = data_slicing(experts, slice_len, ProficiencyLabel.Expert)
+
+    x = np.array(x_novice + x_intermed + x_expert)
+    y = np.append(y_novice, np.append(y_intermed, y_expert))
+
+    # train_to_test_ration = 0.8
+    # split = int(len(x) * train_to_test_ration)
+
+    x_train, y_train = shuffle(x, y)
+    # x_test, y_test = shuffle(x[split:], y[split:])
+
+    return x_train, y_train#, x_test, y_test
+
 
 def augment_and_split(novices: list, intermeds: list, experts: list) -> (
         np.ndarray, np.ndarray, np.ndarray, np.ndarray):
