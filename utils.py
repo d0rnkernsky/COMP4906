@@ -1,5 +1,6 @@
 import numpy as np
 from classes import ParticipantScan, ParticipantsData, Scan, TransformationRecord, ProficiencyLabel
+import mhadatareader as p
 
 
 def remove_spec_char(string):
@@ -12,6 +13,9 @@ def remove_spec_char(string):
 
 
 def add_path_len(data: ParticipantsData):
+    """
+
+    """
     part: ParticipantScan
     for part in data:
         total_path_len = 0
@@ -90,78 +94,23 @@ def add_linear_speed(data: ParticipantsData):
                 rec.linear_speed = rec.path_length / rec.time_stamp
 
 
-def prepare_data_all_reg(data: ParticipantsData):
-    records = []
-    part: ParticipantScan
-    for part in data:
-        shape = (16, 1)
-        part_records = None
-        tr: TransformationRecord
-        for tr in part.get_transforms(Scan.ALL):
-            tr: TransformationRecord
-            to_vector = np.reshape(tr.trans_mat, shape)
-            to_vector[to_vector.shape[0] - 4, 0] = tr.path_length
-            to_vector[to_vector.shape[0] - 3, 0] = tr.angular_speed
-            to_vector[to_vector.shape[0] - 2, 0] = tr.linear_speed
-            to_vector[to_vector.shape[0] - 1, 0] = tr.time_stamp
-
-            if type(part_records) != np.ndarray:
-                part_records = to_vector
-            else:
-                part_records = np.append(part_records, to_vector, 1)
-
-        records.append(part_records)
-
-    return records
-
-
-def find_max_seq(in_data: list):
-    max_len = in_data[0].shape[1]
-
-    for i in range(len(in_data)):
-        rec: np.ndarray
-        rec = in_data[i]
-
-        if rec.shape[1] > max_len:
-            max_len = rec.shape[1]
-
-    return max_len
-
-
-def find_min_seq(in_seq: list):
-    min_len = in_seq[0].shape[1]
-
-    for i in range(len(in_seq)):
-        rec: np.ndarray
-        rec = in_seq[i]
-
-        if rec.shape[1] < min_len:
-            min_len = rec.shape[1]
-
-    return min_len
-
-
-def pad_data_to_max(in_data: list, MAX_LEN: int):
-    assert MAX_LEN is not None
-
-    for i in range(len(in_data)):
-        if MAX_LEN > in_data[i].shape[1]:
-            in_data[i] = np.pad(in_data[i], [(0, 0), (0, MAX_LEN - in_data[i].shape[1])], mode='constant',
-                                constant_values="0")
-
-
 def data_slicing(data, slice_len: int, label: ProficiencyLabel):
     slice_ratio = 0.9
     res = []
-    slice_len = int(np.floor(slice_len * slice_ratio))
+    slice_stride = int(np.floor(slice_len * slice_ratio))
+    zero_vec = np.zeros((data[0].shape[0], 1))
 
     for i in range(len(data)):
         j = 0
-        while j + slice_len < data[i].shape[1]:
-            res.append(data[i][:, j:j + slice_len])
+        while j + slice_stride < data[i].shape[1]:
+            rec = data[i][:, j:j + slice_stride]
+            if np.allclose(zero_vec, rec[:, rec.shape[1] - 1]):
+                break
+
+            res.append(rec)
             j = j + 1
 
-    return res, np.full((len(res),), label.value)
+    return res, [label.value] * len(res)
 
 
 def form_folds(novices, intermed, experts):
@@ -180,43 +129,107 @@ def shuffle(x_data, y_data):
 
     return np.array(x_shuffled), np.array(y_shuffled),
 
-def augment_and_split2(novices: list, intermeds: list, experts: list) -> (
-        np.ndarray, np.ndarray, np.ndarray, np.ndarray):
-    all_data = novices + intermeds + experts
-    slice_len = find_min_seq(all_data)
 
-    x_novice, y_novice = data_slicing(novices, slice_len, ProficiencyLabel.Novice)
-    x_intermed, y_intermed = data_slicing(intermeds, slice_len, ProficiencyLabel.Intermediate)
-    x_expert, y_expert = data_slicing(experts, slice_len, ProficiencyLabel.Expert)
+def slice_sequence(novices, intermeds, experts, slice_window) -> (
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+    x_novice, y_novice = data_slicing(novices, slice_window, ProficiencyLabel.Novice)
+    x_intermed, y_intermed = data_slicing(intermeds, slice_window, ProficiencyLabel.Intermediate)
+    x_expert, y_expert = data_slicing(experts, slice_window, ProficiencyLabel.Expert)
 
     x = np.array(x_novice + x_intermed + x_expert)
-    y = np.append(y_novice, np.append(y_intermed, y_expert))
+    y = np.array(y_novice + y_intermed + y_expert)
 
-    # train_to_test_ration = 0.8
-    # split = int(len(x) * train_to_test_ration)
-
-    x_train, y_train = shuffle(x, y)
-    # x_test, y_test = shuffle(x[split:], y[split:])
-
-    return x_train, y_train#, x_test, y_test
+    return x, y
 
 
-def augment_and_split(novices: list, intermeds: list, experts: list) -> (
-        np.ndarray, np.ndarray, np.ndarray, np.ndarray):
-    all_data = novices + intermeds + experts
-    slice_len = find_min_seq(all_data)
+def prepare_data(novices, intermediates, experts):
+    regions = dict()
 
-    x_novice, y_novice = data_slicing(novices, slice_len, ProficiencyLabel.Novice)
-    x_intermed, y_intermed = data_slicing(intermeds, slice_len, ProficiencyLabel.Intermediate)
-    x_expert, y_expert = data_slicing(experts, slice_len, ProficiencyLabel.Expert)
+    for _, reg in enumerate([Scan.LUQ, Scan.RUQ, Scan.PERICARD, Scan.PELVIC, Scan.ALL]):
+        x_novice = prepare_data_reg(novices, reg)
+        x_intermed = prepare_data_reg(intermediates, reg)
+        x_expert = prepare_data_reg(experts, reg)
 
-    x = np.array(x_novice + x_intermed + x_expert)
-    y = np.append(y_novice, np.append(y_intermed, y_expert))
+        regions[reg] = (x_novice, x_intermed, x_expert)
 
-    train_to_test_ration = 0.8
-    split = int(len(x) * train_to_test_ration)
+    return regions
 
-    x_train, y_train = shuffle(x[:split], y[:split])
-    x_test, y_test = shuffle(x[split:], y[split:])
 
-    return x_train, y_train, x_test, y_test
+def prepare_data_reg(data: ParticipantsData, reg: Scan):
+    records = []
+    part: ParticipantScan
+    for part in data:
+        part_records = None
+        tr: TransformationRecord
+        for tr in part.get_transforms(reg):
+            tr: TransformationRecord
+            to_vector = np.reshape(tr.trans_mat, (tr.trans_mat.shape[0] * tr.trans_mat.shape[1], 1))
+            to_vector[to_vector.shape[0] - 4, 0] = tr.path_length
+            to_vector[to_vector.shape[0] - 3, 0] = tr.angular_speed
+            to_vector[to_vector.shape[0] - 2, 0] = tr.linear_speed
+            to_vector[to_vector.shape[0] - 1, 0] = tr.time_stamp
+
+            if type(part_records) != np.ndarray:
+                part_records = to_vector
+            else:
+                part_records = np.append(part_records, to_vector, 1)
+
+        records.append(part_records)
+
+    return records
+
+
+def load_data(dir_name):
+    parser = p.MhaDataReader()
+
+    # read novices
+    novices = parser.read_data(f'{dir_name}/Novices/')
+    sanity_check(novices)
+
+    add_path_len(novices)
+    add_linear_speed(novices)
+    add_angular_speed(novices)
+
+    # read intermediates
+    intermediates = parser.read_data(f'{dir_name}/Intermediates/')
+    sanity_check(intermediates)
+
+    add_path_len(intermediates)
+    add_linear_speed(intermediates)
+    add_angular_speed(intermediates)
+
+    # read experts
+    experts = parser.read_data(f'{dir_name}/Experts/')
+    sanity_check(experts)
+
+    add_path_len(experts)
+    add_linear_speed(experts)
+    add_angular_speed(experts)
+
+    return novices, intermediates, experts
+
+
+def sanity_check(data: ParticipantsData):
+    for part in data:
+        assert len(part.get_transforms(Scan.ALL)) == \
+               len(part.get_transforms(Scan.LUQ)) + len(part.get_transforms(Scan.RUQ)) + \
+               len(part.get_transforms(Scan.PERICARD)) + len(part.get_transforms(Scan.PELVIC))
+
+        assert part.get_time() == part.get_reg_time(Scan.RUQ) + part.get_reg_time(Scan.LUQ) + \
+               part.get_reg_time(Scan.PERICARD) + part.get_reg_time(Scan.PELVIC)
+
+
+def prepare_folds(train_fold, valid_fold, test_fold, slice_window):
+    x_novice, x_intermed, x_expert = train_fold
+    val_novice, val_intermed, val_expert = valid_fold
+    test_novice, test_intermed, test_expert = test_fold
+
+    x_train, y_train = slice_sequence(x_novice, x_intermed, x_expert, slice_window)
+    x_val, y_val = slice_sequence(val_novice, val_intermed, val_expert, slice_window)
+    x_test, y_test = slice_sequence(test_novice, test_intermed, test_expert, slice_window)
+
+    x_train, y_train = shuffle(x_train, y_train)
+    x_val, y_val = shuffle(x_val, y_val)
+    x_test, y_test = shuffle(x_test, y_test)
+
+    return (x_train, y_train), (x_val, y_val), (x_test, y_test)

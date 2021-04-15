@@ -5,4 +5,5 @@
 /.idea/*
 *.mha
 .DS_Store
+/logs
 
