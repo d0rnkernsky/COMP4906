@@ -105,7 +105,7 @@ def build_model_funetune(base_model, input_shape, num_classes, filters,
 if __name__ == '__main__':
     novices_all, intermed_all, experts_all = ut.load_data(DIR_NAME)
     prepared = ut.prepare_data(novices_all, intermed_all, experts_all)
-    slice_window = 500
+    slice_window = 70
     print(slice_window)
 
     folds_stats = []
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     print('Test accuracy', test_acc)
     print('Test loss', test_loss)
 
-    save_model(model, 0)
+    # save_model(model, 0)
 
     folds_stats.append((test_loss, test_acc))
 
@@ -252,7 +252,7 @@ if __name__ == '__main__':
         print(f'Test accuracy {reg}', test_acc)
         print(f'Test loss {reg}', test_loss)
 
-        save_model_tune(model, i, reg)
+        # save_model_tune(model, i, reg)
 
         fine_folds_stats[i][reg].append((test_loss, test_acc))
 
