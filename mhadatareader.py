@@ -3,11 +3,11 @@ import numpy as np
 import utils as ut
 import classes as cs
 
-
 RECORD_STATUS_MSG = 'status'
 PROB_TO_TRACKER_REC = 'probetotracker'
 REF_TO_TRACKER_REC = 'referencetotracker'
 TIMESTAMP_REC = 'timestamp'
+
 
 def parse_timestamp_line(line):
     """

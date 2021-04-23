@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ProfLevel(Enum):
     '''
         Proficiency level of a participant

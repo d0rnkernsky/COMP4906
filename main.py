@@ -1,7 +1,7 @@
 from mhadatareader import MhaDataReader
 from classes import ParticipantsData, Scan, ProficiencyLabel, FoldSplit
 import utils as ut
-from sklearn.metrics import confusion_matrix , classification_report
+from sklearn.metrics import confusion_matrix, classification_report
 from tensorflow import keras
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,8 +16,10 @@ DIR_NAME = './data_bckp'
 MODEL_NAME = 'best_model.tf'
 LOG_DIR = './logs'
 
+
 def save_model(model, fold):
     model.save(f'./model_{fold}.tf')
+
 
 def build_model(input_shape, num_classes, filters, kernel_size, dropout_rate, regularizer):
     input_layer = keras.layers.Input(shape=input_shape)
@@ -102,6 +104,7 @@ def build_model_funetune(base_model, input_shape, num_classes, filters,
 
     return model
 
+
 if __name__ == '__main__':
     novices_all, intermed_all, experts_all = ut.load_data(DIR_NAME)
     prepared = ut.prepare_data(novices_all, intermed_all, experts_all)
@@ -183,7 +186,6 @@ if __name__ == '__main__':
 
     folds_stats.append((test_loss, test_acc))
 
-
     ##### FINE TUNING
     fine_models_train_hist = dict()
     fine_folds_stats = dict()
@@ -255,4 +257,3 @@ if __name__ == '__main__':
         # save_model_tune(model, i, reg)
 
         fine_folds_stats[i][reg].append((test_loss, test_acc))
-
