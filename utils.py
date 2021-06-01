@@ -113,10 +113,10 @@ def data_slicing(data, slice_len: int, label: ProficiencyLabel):
     return res, [label.value] * len(res)
 
 
-def form_folds(novices, intermed, experts):
-    return [(novices[:5], intermed[:5], [experts[0]]),
-            (novices[5:10], intermed[5:10], [experts[1]]),
-            (novices[10:], intermed[10:], [experts[2]])]
+def form_folds(novices, intermed, experts, repeat_experts=False, repreat_num=5):
+    return [(novices[:5], intermed[:5], [experts[0]] * (repreat_num if repeat_experts else 1)),
+            (novices[5:10], intermed[5:10], [experts[1]] * (repreat_num if repeat_experts else 1)),
+            (novices[10:], intermed[10:], [experts[2]] * (repreat_num if repeat_experts else 1))]
 
 
 def shuffle(x_data, y_data):
@@ -142,20 +142,20 @@ def slice_sequence(novices, intermeds, experts, slice_window) -> (
     return x, y
 
 
-def prepare_data(novices, intermediates, experts):
+def prepare_data(novices, intermediates, experts, incl_extra=True):
     regions = dict()
 
     for _, reg in enumerate([Scan.LUQ, Scan.RUQ, Scan.PERICARD, Scan.PELVIC, Scan.ALL]):
-        x_novice = prepare_data_reg(novices, reg)
-        x_intermed = prepare_data_reg(intermediates, reg)
-        x_expert = prepare_data_reg(experts, reg)
+        x_novice = prepare_data_reg(novices, reg, incl_extra)
+        x_intermed = prepare_data_reg(intermediates, reg, incl_extra)
+        x_expert = prepare_data_reg(experts, reg, incl_extra)
 
         regions[reg] = (x_novice, x_intermed, x_expert)
 
     return regions
 
 
-def prepare_data_reg(data: ParticipantsData, reg: Scan):
+def prepare_data_reg(data: ParticipantsData, reg: Scan, incl_extra=True):
     records = []
     part: ParticipantScan
     for part in data:
@@ -164,10 +164,11 @@ def prepare_data_reg(data: ParticipantsData, reg: Scan):
         for tr in part.get_transforms(reg):
             tr: TransformationRecord
             to_vector = np.reshape(tr.trans_mat, (tr.trans_mat.shape[0] * tr.trans_mat.shape[1], 1))
-            to_vector[to_vector.shape[0] - 4, 0] = tr.path_length
-            to_vector[to_vector.shape[0] - 3, 0] = tr.angular_speed
-            to_vector[to_vector.shape[0] - 2, 0] = tr.linear_speed
-            to_vector[to_vector.shape[0] - 1, 0] = tr.time_stamp
+            if incl_extra:
+                to_vector[to_vector.shape[0] - 4, 0] = tr.path_length
+                to_vector[to_vector.shape[0] - 3, 0] = tr.angular_speed
+                to_vector[to_vector.shape[0] - 2, 0] = tr.linear_speed
+                to_vector[to_vector.shape[0] - 1, 0] = tr.time_stamp
 
             if type(part_records) != np.ndarray:
                 part_records = to_vector
@@ -179,32 +180,29 @@ def prepare_data_reg(data: ParticipantsData, reg: Scan):
     return records
 
 
-def load_data(dir_name):
+def load_data(dir_name, compute_features=True):
     parser = p.MhaDataReader()
 
     # read novices
     novices = parser.read_data(f'{dir_name}/Novices/')
     sanity_check(novices)
-
-    add_path_len(novices)
-    add_linear_speed(novices)
-    add_angular_speed(novices)
+    compute_relative_transformations(novices)
+    
 
     # read intermediates
     intermediates = parser.read_data(f'{dir_name}/Intermediates/')
     sanity_check(intermediates)
-
-    add_path_len(intermediates)
-    add_linear_speed(intermediates)
-    add_angular_speed(intermediates)
+    
+    compute_relative_transformations(intermediates)
 
     # read experts
     experts = parser.read_data(f'{dir_name}/Experts/')
     sanity_check(experts)
 
-    add_path_len(experts)
-    add_linear_speed(experts)
-    add_angular_speed(experts)
+    if compute_features:
+        add_features(novices)
+        add_features(intermediates)
+        add_features(experts)
 
     return novices, intermediates, experts
 
@@ -218,6 +216,20 @@ def sanity_check(data: ParticipantsData):
         assert part.get_time() == part.get_reg_time(Scan.RUQ) + part.get_reg_time(Scan.LUQ) + \
                part.get_reg_time(Scan.PERICARD) + part.get_reg_time(Scan.PELVIC)
 
+
+def compute_relative_transformations(data: ParticipantsData):
+    for part in data:
+        part: ParticipantScan
+        reg_transf = part.get_transforms(Scan.ALL)
+        for i in range(1, len(reg_transf)):
+            rel_transform = np.linalg.inv(reg_transf[i - 1].trans_mat).dot(reg_transf[i].trans_mat)
+            reg_transf[i].trans_mat = rel_transform
+            
+
+def add_features(data):
+    add_path_len(data)
+    add_linear_speed(data)
+    add_angular_speed(data)
 
 def prepare_folds(train_fold, valid_fold, test_fold, slice_window):
     x_novice, x_intermed, x_expert = train_fold

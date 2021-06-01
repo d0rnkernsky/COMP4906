@@ -1,5 +1,5 @@
 from mhadatareader import MhaDataReader
-from classes import ParticipantsData, Scan, ProficiencyLabel, FoldSplit
+from classes import ParticipantsData, Scan, ProficiencyLabel
 import utils as ut
 from sklearn.metrics import confusion_matrix, classification_report
 from tensorflow import keras
@@ -9,6 +9,8 @@ import itertools as it
 import random
 from tensorflow.keras.utils import plot_model
 from sklearn.metrics import recall_score, confusion_matrix
+import seaborn as sn
+import pandas as pd
 
 import os
 
@@ -91,7 +93,8 @@ def build_model_funetune(base_model, input_shape, num_classes, filters,
                                    name=f'Dropout_{str(len(model.layers) + 1)}'
                                    ))
 
-    model.add(keras.layers.GlobalAveragePooling1D(name=f'GlobalAveragePooling1D_{str(len(model.layers) + 1)}'))
+    model.add(keras.layers.GlobalAveragePooling1D(
+        name=f'GlobalAveragePooling1D_{str(len(model.layers) + 1)}'))
     model.add(keras.layers.Dense(num_classes, activation='softmax',
                                  name=f'Dense_{str(len(model.layers) + 1)}'))
 
@@ -107,7 +110,8 @@ def build_model_funetune(base_model, input_shape, num_classes, filters,
 
 if __name__ == '__main__':
     novices_all, intermed_all, experts_all = ut.load_data(DIR_NAME)
-    prepared = ut.prepare_data(novices_all, intermed_all, experts_all)
+    prepared = ut.prepare_data(
+        novices_all, intermed_all, experts_all, incl_extra=False)
     slice_window = 70
     print(slice_window)
 
@@ -137,14 +141,16 @@ if __name__ == '__main__':
     optimizer = keras.optimizers.Adam(
         learning_rate=learning_rate,
     )
-    iterations = list(it.permutations([i for i in range(len(prepared[ut.Scan.ALL]))]))
+    iterations = list(it.permutations(
+        [i for i in range(len(prepared[ut.Scan.ALL]))]))
     regularizer = keras.regularizers.l1_l2(0.05)
 
     novices_all, intermed_all, experts_all = prepared[ut.Scan.ALL]
-    folds_all = ut.form_folds(novices_all, intermed_all, experts_all)
+    folds_all = ut.form_folds(
+        novices_all, intermed_all, experts_all, repeat_experts=False)
 
     model_1 = None
-    train, valid, test = iterations[0]
+    train, valid, test = iterations[1]
     train, valid, test = folds_all[train], folds_all[valid], folds_all[test]
     train, valid, test = ut.prepare_folds(train, valid, test, slice_window)
 
@@ -178,12 +184,33 @@ if __name__ == '__main__':
 
     models_train_hist[0] = history.history
 
-    test_loss, test_acc = model.evaluate(x_test, y_test)
-    print('Test accuracy', test_acc)
-    print('Test loss', test_loss)
+    #test_loss, test_acc = model.evaluate(x_test, y_test)
+    #print('Test accuracy', test_acc)
+    #print('Test loss', test_loss)
 
     # save_model(model, 0)
 
+    y_pred = model.predict(x_test)
+
+    y_test_cat = keras.utils.to_categorical(y_test)
+    y_test_cat = y_test_cat.argmax(axis=1)
+    y_pred = np.argmax(y_pred, axis=1)
+
+    matrix = confusion_matrix(y_test_cat, y_pred, labels=[2, 1, 0])
+    #true (rows), predicted (columns)
+
+    labels = ["Novice", "Intermediate", "Expert"]
+    df_cm = pd.DataFrame(matrix, range(3), range(3))
+    # plt.figure(figsize=(10,7))
+    sn.set(font_scale=1.4)  # for label size
+    sn.heatmap(df_cm, annot=True, annot_kws={"size": 16},
+               xticklabels=labels,
+               yticklabels=labels,
+               cbar=False, cmap="gray")  # font size
+
+    plt.show()
+
+"""
     folds_stats.append((test_loss, test_acc))
 
     ##### FINE TUNING
@@ -257,3 +284,4 @@ if __name__ == '__main__':
         # save_model_tune(model, i, reg)
 
         fine_folds_stats[i][reg].append((test_loss, test_acc))
+"""
