@@ -134,7 +134,7 @@ class MhaDataReader:
                     timestamp = parse_timestamp_line(line)
                     time_delta = timestamp - prev_time
 
-                    # skip identical transformations with same time stamps
+                    # skip identical transformations with same time stamp
                     if np.allclose(prev_ref_to_tracker, ref_to_tracker) \
                             and np.allclose(prev_prob_to_tracker, prob_to_tracker) \
                             and time_delta == prev_time_delta:
